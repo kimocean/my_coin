@@ -59,14 +59,20 @@ export async function GET(req: NextRequest) {
     const manaArr = await manaRes.json();
     if (manaArr && Array.isArray(manaArr) && typeof manaArr[0]?.rate === 'number' && manaArr[0].rate > 1000) usdKrw = manaArr[0].rate;
   } catch (e) {}
-  // 바이낸스 fetch
+  // 바이낸스 fetch (Vercel 리전을 hnd1/sin1로 설정하여 451 에러 우회)
   let binance:any[] = [];
   try { 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5초 타임아웃
+    
     const binanceRes = await fetch(BINANCE_URL, {
       headers: {
         'Accept': 'application/json',
       },
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
+    
     if (!binanceRes.ok) {
       console.error(`Binance API error: ${binanceRes.status} ${binanceRes.statusText}`);
       binance = [];
@@ -76,13 +82,21 @@ export async function GET(req: NextRequest) {
       if (Array.isArray(binanceData)) {
         binance = binanceData;
         console.log(`Binance API: Loaded ${binance.length} prices`);
+        // BTC, ETH가 있는지 확인
+        const btcFound = binance.find((b: any) => b?.symbol === 'BTCUSDT');
+        const ethFound = binance.find((b: any) => b?.symbol === 'ETHUSDT');
+        console.log(`BTCUSDT found: ${!!btcFound}, ETHUSDT found: ${!!ethFound}`);
       } else {
-        console.error('Binance API returned non-array:', typeof binanceData, binanceData);
+        console.error('Binance API returned non-array:', typeof binanceData);
         binance = [];
       }
     }
   } catch(e: any){
-    console.error('Binance fetch error:', e?.message || e);
+    if (e.name === 'AbortError') {
+      console.error('Binance API timeout');
+    } else {
+      console.error('Binance fetch error:', e?.message || e);
+    }
     binance = [];
   }
   // 코인별 집계
@@ -118,12 +132,26 @@ export async function GET(req: NextRequest) {
       curr_usd = 1; // 스테이블코인은 1달러 고정
     } else {
       const searchSymbol = sym.toUpperCase() + 'USDT';
-      const binancePrice = binance.find(b => b && b.symbol === searchSymbol);
+      // 여러 방법으로 찾기 시도
+      let binancePrice = binance.find(b => b && b.symbol === searchSymbol);
+      
+      // 대소문자 무시하고 찾기
+      if (!binancePrice) {
+        binancePrice = binance.find(b => b && b.symbol && b.symbol.toUpperCase() === searchSymbol);
+      }
+      
       if (binancePrice && binancePrice.price) {
         curr_usd = parseFloat(binancePrice.price);
+        if (isNaN(curr_usd)) {
+          console.warn(`Invalid price for ${searchSymbol}: ${binancePrice.price}`);
+          curr_usd = 0;
+        }
       } else {
-        // Binance에서 못 찾았을 때 로그 (디버깅용)
-        console.warn(`Price not found for ${searchSymbol}. Binance array length: ${binance.length}`);
+        // 디버깅: Binance에서 BTCUSDT, ETHUSDT가 있는지 확인
+        if (sym.toUpperCase() === 'BTC' || sym.toUpperCase() === 'ETH') {
+          const sampleSymbols = binance.slice(0, 5).map((b: any) => b?.symbol).filter(Boolean);
+          console.warn(`Price not found for ${searchSymbol}. Looking for in ${binance.length} items. Sample symbols: ${sampleSymbols.join(', ')}`);
+        }
         curr_usd = 0;
       }
     }
