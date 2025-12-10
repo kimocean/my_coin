@@ -11,7 +11,7 @@ const supabase = createClient(
   process.env.SUPABASE_KEY || ''
 );
 const MANANA_URL = 'https://api.manana.kr/exchange/rate/KRW/USD.json';
-const BINANCE_URL = 'https://api.binance.com/api/v3/ticker/price';
+const COINPAPRIKA_URL = 'https://api.coinpaprika.com/v1/tickers';
 
 function safeNum(n: any): number {
   if (typeof n === 'number') return n;
@@ -59,13 +59,13 @@ export async function GET(req: NextRequest) {
     const manaArr = await manaRes.json();
     if (manaArr && Array.isArray(manaArr) && typeof manaArr[0]?.rate === 'number' && manaArr[0].rate > 1000) usdKrw = manaArr[0].rate;
   } catch (e) {}
-  // 바이낸스 fetch (Vercel 리전을 hnd1/sin1로 설정하여 451 에러 우회)
-  let binance:any[] = [];
+  // CoinPaprika API로 가격 가져오기
+  let coinPrices: Record<string, number> = {};
   try { 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000); // 5초 타임아웃
     
-    const binanceRes = await fetch(BINANCE_URL, {
+    const paprikaRes = await fetch(COINPAPRIKA_URL, {
       headers: {
         'Accept': 'application/json',
       },
@@ -73,31 +73,32 @@ export async function GET(req: NextRequest) {
     });
     clearTimeout(timeoutId);
     
-    if (!binanceRes.ok) {
-      console.error(`Binance API error: ${binanceRes.status} ${binanceRes.statusText}`);
-      binance = [];
+    if (!paprikaRes.ok) {
+      console.error(`CoinPaprika API error: ${paprikaRes.status} ${paprikaRes.statusText}`);
     } else {
-      const binanceData = await binanceRes.json();
+      const paprikaData = await paprikaRes.json();
       // 배열인지 확인
-      if (Array.isArray(binanceData)) {
-        binance = binanceData;
-        console.log(`Binance API: Loaded ${binance.length} prices`);
+      if (Array.isArray(paprikaData)) {
+        // CoinPaprika는 symbol 필드로 매칭 (예: BTC-USD, ETH-USD)
+        paprikaData.forEach((coin: any) => {
+          if (coin.symbol && coin.quotes?.USD?.price) {
+            const symbol = coin.symbol.toUpperCase();
+            coinPrices[symbol] = coin.quotes.USD.price;
+          }
+        });
+        console.log(`CoinPaprika API: Loaded ${Object.keys(coinPrices).length} prices`);
         // BTC, ETH가 있는지 확인
-        const btcFound = binance.find((b: any) => b?.symbol === 'BTCUSDT');
-        const ethFound = binance.find((b: any) => b?.symbol === 'ETHUSDT');
-        console.log(`BTCUSDT found: ${!!btcFound}, ETHUSDT found: ${!!ethFound}`);
+        console.log(`BTC found: ${!!coinPrices['BTC']}, ETH found: ${!!coinPrices['ETH']}`);
       } else {
-        console.error('Binance API returned non-array:', typeof binanceData);
-        binance = [];
+        console.error('CoinPaprika API returned non-array:', typeof paprikaData);
       }
     }
   } catch(e: any){
     if (e.name === 'AbortError') {
-      console.error('Binance API timeout');
+      console.error('CoinPaprika API timeout');
     } else {
-      console.error('Binance fetch error:', e?.message || e);
+      console.error('CoinPaprika fetch error:', e?.message || e);
     }
-    binance = [];
   }
   // 코인별 집계
   const group: Record<string, any> = {};
@@ -128,29 +129,17 @@ export async function GET(req: NextRequest) {
     // 스테이블코인 처리 (USDT, USDC, BUSD 등)
     const stablecoins = ['USDT', 'USDC', 'BUSD', 'DAI', 'TUSD', 'USDP'];
     let curr_usd = 0;
-    if (stablecoins.includes(sym.toUpperCase())) {
+    const symUpper = sym.toUpperCase();
+    if (stablecoins.includes(symUpper)) {
       curr_usd = 1; // 스테이블코인은 1달러 고정
     } else {
-      const searchSymbol = sym.toUpperCase() + 'USDT';
-      // 여러 방법으로 찾기 시도
-      let binancePrice = binance.find(b => b && b.symbol === searchSymbol);
-      
-      // 대소문자 무시하고 찾기
-      if (!binancePrice) {
-        binancePrice = binance.find(b => b && b.symbol && b.symbol.toUpperCase() === searchSymbol);
-      }
-      
-      if (binancePrice && binancePrice.price) {
-        curr_usd = parseFloat(binancePrice.price);
-        if (isNaN(curr_usd)) {
-          console.warn(`Invalid price for ${searchSymbol}: ${binancePrice.price}`);
-          curr_usd = 0;
-        }
+      // CoinPaprika에서 가격 조회
+      if (coinPrices[symUpper]) {
+        curr_usd = coinPrices[symUpper];
       } else {
-        // 디버깅: Binance에서 BTCUSDT, ETHUSDT가 있는지 확인
-        if (sym.toUpperCase() === 'BTC' || sym.toUpperCase() === 'ETH') {
-          const sampleSymbols = binance.slice(0, 5).map((b: any) => b?.symbol).filter(Boolean);
-          console.warn(`Price not found for ${searchSymbol}. Looking for in ${binance.length} items. Sample symbols: ${sampleSymbols.join(', ')}`);
+        // CoinPaprika에 없는 경우 로그
+        if (symUpper === 'BTC' || symUpper === 'ETH') {
+          console.warn(`Price not found for ${symUpper} in CoinPaprika`);
         }
         curr_usd = 0;
       }
