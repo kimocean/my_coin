@@ -10,9 +10,9 @@ export default function EditModal({open, row, onClose, onSaved}:{open:boolean, r
   const [confirmDel, setConfirmDel] = useState(false);
   if (!open) return null;
   const handleChange = (e: React.ChangeEvent<HTMLInputElement|HTMLSelectElement>) => {
-    setForm(f=>({...f, [e.target.name]: e.target.value }));
+    setForm((f: any)=>({...f, [e.target.name]: e.target.value }));
   };
-  const handleDate = (d:Date)=> setForm(f=>({...f, trade_date:dayjs(d).format('YYYY-MM-DD')}));
+  const handleDate = (d:Date)=> setForm((f: any)=>({...f, trade_date:dayjs(d).format('YYYY-MM-DD')}));
   const handleSave = async(e:React.FormEvent)=>{
     e.preventDefault(); setError(""); setSaving(true);
     try{
