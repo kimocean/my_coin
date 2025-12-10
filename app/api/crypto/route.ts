@@ -61,7 +61,20 @@ export async function GET(req: NextRequest) {
   } catch (e) {}
   // 바이낸스 fetch
   let binance:any[] = [];
-  try { binance = await (await fetch(BINANCE_URL)).json(); } catch(e){}
+  try { 
+    const binanceRes = await fetch(BINANCE_URL);
+    const binanceData = await binanceRes.json();
+    // 배열인지 확인
+    if (Array.isArray(binanceData)) {
+      binance = binanceData;
+    } else {
+      console.error('Binance API returned non-array:', typeof binanceData);
+      binance = [];
+    }
+  } catch(e){
+    console.error('Binance fetch error:', e);
+    binance = [];
+  }
   // 코인별 집계
   const group: Record<string, any> = {};
   rows?.forEach((r:any) => {
