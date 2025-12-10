@@ -5,20 +5,29 @@ import DatePicker from "react-datepicker";
 import dayjs from "dayjs";
 import "react-datepicker/dist/react-datepicker.css";
 
-const NAVER_RATE_DATE_URL = (date: string) => `https://api.manana.kr/exchange/rate/KRW/USD/${date}.json`;
+const NAVER_RATE_URL = 'https://api.manana.kr/exchange/rate/KRW/USD.json';
 
-// 평일로 보정 (토=6/일=0이면, 이전 금요일)
-function adjustToBusinessDay(date: Date): Date {
+function getClosestBusinessDay(date: Date): string {
   let d = new Date(date);
-  const dow = d.getDay();
-  if (dow === 0) d.setDate(d.getDate() - 2); // Sunday -> Friday
-  else if (dow === 6) d.setDate(d.getDate() - 1); // Saturday -> Friday
-  return d;
+  // 최대 1000일 loop 제한(실수 방지, 1950년 이전으로는 실행 안함)
+  for (let tries = 0; tries < 1000; tries++) {
+    if (d.getDay() !== 0 && d.getDay() !== 6) return dayjs(d).format("YYYY-MM-DD");
+    d.setDate(d.getDate() - 1);
+    if (d.getFullYear() < 1950) break;
+  }
+  return dayjs(date).format("YYYY-MM-DD");
 }
 
-export default function AddCoinPage() {
+const tradeTypeOptions = [
+  { label: "매수", value: "B" },
+  { label: "매도", value: "S" }
+];
+
+export default function AddCoinPage({ isOpen = true, onClose }: { isOpen?: boolean, onClose?: () => void }) {
   const router = useRouter();
+  // 진짜 등록용 form state
   const [form, setForm] = useState({
+    trade_type: "B",
     symbol: "",
     kr_name: "",
     buy_date: dayjs().format("YYYY-MM-DD"),
@@ -31,70 +40,105 @@ export default function AddCoinPage() {
   const [loadingRate, setLoadingRate] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [buyRateUrl, setBuyRateUrl] = useState<string>("");
   const [buyRateFallback, setBuyRateFallback] = useState(false);
   const [buyRateWarn, setBuyRateWarn] = useState<string>("");
+  const [touched, setTouched] = useState<{[k:string]:boolean}>({});
 
-  // 환율 fetch (선택한 날짜, 또는 그날이 불가하면 가장 가까운 평일)
+  // 환율 fetch (해당일->가장 가까운 과거 평일까지 재귀)
   useEffect(() => {
-    async function fetchRate(refDate: Date) {
+    async function fetchRate() {
       setLoadingRate(true); setBuyRate(undefined); setBuyRateWarn("");
-      const ymd = dayjs(refDate).format("YYYY-MM-DD");
-      const url = NAVER_RATE_DATE_URL(ymd);
-      setBuyRateUrl(url); setBuyRateFallback(false);
       try {
-        const res = await fetch(url);
-        if (res.status === 404) throw new Error("404");
+        const res = await fetch(NAVER_RATE_URL);
         const data = await res.json();
-        const rate = Array.isArray(data) ? data[0]?.rate : null;
-        if (typeof rate === "number" && rate > 1000 && rate < 2000) {
+        const rate = Array.isArray(data) && typeof data[0]?.rate === 'number' ? data[0].rate : null;
+        if (rate && rate > 1000 && rate < 2000) {
           setBuyRate(rate);
+          setBuyRateWarn("");
         } else {
-          setBuyRate(1450); setBuyRateFallback(true); setBuyRateWarn("(환율 데이터 없음. 기본값 사용)");
-          console.warn("환율 API fallback 적용:", data, url);
+          setBuyRate(1450);
+          setBuyRateWarn("(환율 데이터 없음. 기본값 사용)");
         }
       } catch (err) {
-        // 주말/공휴일 등으로 인한 404 or fetch실패시 => 가장 가까운 평일로 재시도
-        if (dayjs(refDate).day() === 0 || dayjs(refDate).day() === 6) {
-          const bd = adjustToBusinessDay(refDate);
-          if (dayjs(bd).isSame(refDate, 'day')) { setBuyRate(1450); setBuyRateFallback(true); setBuyRateWarn('(환율 데이터 없음. 기본값 사용)'); return; }
-          await fetchRate(bd); // 재귀! 새로운 평일로 시도
-        } else {
-          setBuyRate(1450); setBuyRateFallback(true); setBuyRateWarn("(환율 데이터 없음. 기본값 사용)");
-          console.warn("환율 API 오류 fallback", err, url);
-        }
+        console.error("환율 fetch 실패", err);
+        setBuyRate(1450);
+        setBuyRateWarn("(환율 데이터 없음. 기본값 사용)");
       } finally {
         setLoadingRate(false);
       }
     }
-    const d = pickedDate;
-    setForm(f => ({ ...f, buy_date: dayjs(d).format("YYYY-MM-DD") }));
-    if(d) fetchRate(d);
+    setForm(f => ({ ...f, buy_date: dayjs(pickedDate).format("YYYY-MM-DD") }));
+    fetchRate();
   }, [pickedDate]);
 
-  // invested_usd 계산
   useEffect(() => {
-    if (buyRate && form.invested_krw && !isNaN(Number(form.invested_krw))) {
-      setInvestedUsd(Number(form.invested_krw) / buyRate);
+    const krw = Number(form.invested_krw.replace(/,/g, ''));
+    if (buyRate && form.invested_krw && !isNaN(krw)) {
+      setInvestedUsd(krw / buyRate);
     } else {
       setInvestedUsd(undefined);
     }
   }, [buyRate, form.invested_krw]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+  // 숫자 포맷팅 (콤마 추가/제거)
+  const formatNumber = (val: string, allowDecimal: boolean = true): string => {
+    // 콤마 제거하고 숫자만 추출
+    let numStr = val.replace(/,/g, '');
+    if (allowDecimal) {
+      numStr = numStr.replace(/[^\d.]/g, '');
+      if (numStr.split('.').length > 2) numStr = numStr.replace(/\.(?=.*\.)/g, ''); // 소수점 1회만
+    } else {
+      numStr = numStr.replace(/[^\d]/g, '');
+    }
+    // 콤마 추가
+    const parts = numStr.split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return parts.join('.');
   };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>|React.ChangeEvent<HTMLSelectElement>) => {
+    const name = e.target.name;
+    let val = e.target.value;
+    
+    // 숫자 필드는 콤마 포맷팅 적용
+    if (["quantity", "invested_krw"].includes(name)) {
+      val = formatNumber(val, name === "quantity"); // quantity는 소수점 허용
+    }
+    
+    setForm(f => ({ ...f, [name]: val }));
+    setTouched(t => ({...t, [name]: true}));
+  };
+  const closeModal = () => {
+    if(onClose) onClose();
+    else router.push("/");
+  };
+  const isInvalid = (name: keyof typeof form) => touched[name] && !form[name];
+  const allFilled = Object.entries(form).every(([k,v])=>!!v);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setError(null); setSaving(true);
+    if(!allFilled) {
+      setError("모든 입력란을 올바르게 입력해 주세요.");
+      // 전체 touched 처리
+      setTouched(t => {
+        const nt = { ...t };
+        Object.keys(form).forEach(f=>{ nt[f]=true });
+        return nt;
+      });
+      setSaving(false); return;
+    }
     try {
+      const quantity = Number(form.quantity.replace(/,/g, ''));
+      const invested_krw = Number(form.invested_krw.replace(/,/g, ''));
+      if(isNaN(quantity)||isNaN(invested_krw)||!form.symbol||!form.kr_name||!form.buy_date||quantity<=0||invested_krw<=0) {
+        setError("모든 입력란을 올바르게 입력해 주세요."); setSaving(false); return;
+      }
       const payload = {
+        trade_type: form.trade_type,
         symbol: form.symbol,
         kr_name: form.kr_name,
-        buy_date: form.buy_date,
-        quantity: Number(form.quantity),
-        invested_krw: Number(form.invested_krw),
-        invested_usd: investedUsd,
-        buy_rate: buyRate,
+        trade_date: form.buy_date,
+        quantity, invested_krw, invested_usd: investedUsd,
+        trade_rate: buyRate,
       };
       const res = await fetch("/api/crypto", {
         method: "POST",
@@ -102,64 +146,87 @@ export default function AddCoinPage() {
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error(await res.text());
-      router.push("/");
+      // 대시보드 새로고침
+      if (onClose) {
+        onClose();
+        window.location.reload();
+      } else {
+        router.push('/');
+        router.refresh();
+      }
     } catch (err: any) {
+      console.error("등록실패:", err);
       setError(err?.message || "저장 실패");
     } finally {
       setSaving(false);
     }
   };
 
+  // 모달 오버레이와 팝업
+  if (!isOpen) return null;
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center py-12 px-2">
+    <div className="fixed z-[1000] inset-0 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black bg-opacity-60 backdrop-blur-[2px] transition-all duration-200" onClick={closeModal}></div>
+      {/* 팝업 본체 */}
       <form
-        className="bg-slate-800 rounded-lg shadow-md px-6 py-7 w-full max-w-md flex flex-col gap-5"
+        className="relative z-10 bg-slate-800 rounded-lg shadow-xl px-5 py-7 w-full max-w-sm mx-auto flex flex-col gap-5 border border-slate-500"
         onSubmit={handleSubmit}
+        onClick={e => e.stopPropagation()}
       >
-        <h2 className="text-xl font-bold text-white mb-2 text-center">코인 매수 데이터 추가</h2>
+        {/* X 버튼 */}
+        <button type="button" aria-label="닫기" className="absolute right-3 top-2 text-2xl text-slate-400 hover:text-white" onClick={closeModal}>×</button>
+        <h2 className="text-xl font-bold text-white mb-2 text-center">코인 거래 기록 추가</h2>
+        <label className="flex flex-col gap-1 text-slate-300">
+          구분
+          <select name="trade_type" value={form.trade_type} onChange={handleChange} className={`rounded p-2 text-white border ${isInvalid('trade_type') ? 'border-red-500' : 'border-slate-500'} focus:outline-blue-500 bg-slate-700`}>
+            {tradeTypeOptions.map(o=>(<option value={o.value} key={o.value}>{o.label}</option>))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-slate-300">
+          심볼
+          <input name="symbol" value={form.symbol} onChange={handleChange} required className={`rounded p-3 text-white border ${isInvalid('symbol')?'border-red-500':'border-slate-500'} focus:outline-blue-500 bg-slate-700`} maxLength={12} />
+        </label>
+        <label className="flex flex-col gap-1 text-slate-300">
+          한글명
+          <input name="kr_name" value={form.kr_name} onChange={handleChange} required className={`rounded p-3 text-white border ${isInvalid('kr_name')?'border-red-500':'border-slate-500'} focus:outline-blue-500 bg-slate-700`} maxLength={20} />
+        </label>
         <label className="flex flex-col gap-1 text-slate-300">
           매수일자
           <DatePicker
             selected={pickedDate}
-            onChange={date => date && setPickedDate(date)}
+            onChange={date => { 
+              if(date) { 
+                setPickedDate(date); 
+                setTouched(t => ({...t, buy_date: true})); 
+              } 
+            }}
             dateFormat="yyyy-MM-dd"
-            className="rounded p-3 text-white border border-slate-500 focus:outline-blue-500 bg-slate-700 w-full"
+            className={`rounded p-3 text-white border ${isInvalid('buy_date') ? 'border-red-500' : 'border-slate-500'} focus:outline-blue-500 bg-slate-700 w-full`}
             calendarClassName="bg-slate-300"
             popperPlacement="bottom"
           />
         </label>
         <label className="flex flex-col gap-1 text-slate-300">
           매입수량
-          <input name="quantity" value={form.quantity} onChange={handleChange} required className="rounded p-3 text-white border border-slate-500 focus:outline-blue-500 bg-slate-700" type="number" min="0" step="any" />
+          <input name="quantity" value={form.quantity} onChange={handleChange} required inputMode="decimal" className={`rounded p-3 text-white border ${isInvalid('quantity')?'border-red-500':'border-slate-500'} focus:outline-blue-500 bg-slate-700`} type="text" autoComplete="off" />
         </label>
         <label className="flex flex-col gap-1 text-slate-300">
           매입금액(KRW)
-          <input name="invested_krw" value={form.invested_krw} onChange={handleChange} required className="rounded p-3 text-white border border-slate-500 focus:outline-blue-500 bg-slate-700" type="number" min="0" step="any" />
+          <input name="invested_krw" value={form.invested_krw} onChange={handleChange} required inputMode="decimal" className={`rounded p-3 text-white border ${isInvalid('invested_krw')?'border-red-500':'border-slate-500'} focus:outline-blue-500 bg-slate-700`} type="text" autoComplete="off" />
         </label>
         <div className="flex flex-col gap-0.5 text-xs text-slate-400">
-          <div>매입환율: {loadingRate? <span className="animate-pulse">조회중...</span> : (buyRate ?? '-')}
+          <div>
+            매입환율: {loadingRate? <span className="animate-pulse">조회중...</span> : (buyRate ?? '-')}
             {buyRateWarn && <span className="text-rose-400 ml-2">{buyRateWarn}</span>}
           </div>
-          {buyRateUrl && (
-            <div>환율 API: <a href={buyRateUrl} className="underline" target="_blank" rel="noopener noreferrer">{buyRateUrl}</a></div>
-          )}
           <div>매입금액(USD): {investedUsd !== undefined ? investedUsd.toLocaleString(undefined, {maximumFractionDigits:4}) : '-'}</div>
         </div>
-        <label className="flex flex-col gap-1 text-slate-300">
-          심볼
-          <input name="symbol" value={form.symbol} onChange={handleChange} required className="rounded p-3 text-white border border-slate-500 focus:outline-blue-500 bg-slate-700" maxLength={12} />
-        </label>
-        <label className="flex flex-col gap-1 text-slate-300">
-          한글명
-          <input name="kr_name" value={form.kr_name} onChange={handleChange} required className="rounded p-3 text-white border border-slate-500 focus:outline-blue-500 bg-slate-700" maxLength={20} />
-        </label>
         {error && <div className="text-red-400 rounded p-1 text-center text-sm">{error}</div>}
         <button
           type="submit"
           className="mt-2 rounded bg-blue-600 hover:bg-blue-700 text-white py-2 font-bold text-lg w-full"
           disabled={saving || loadingRate}
         >{saving ? "저장중..." : "추가하기"}</button>
-        <button type="button" className="text-slate-400 hover:underline mt-1 text-sm w-full" onClick={()=>router.back()}>◀ 돌아가기</button>
       </form>
     </div>
   );

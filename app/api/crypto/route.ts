@@ -1,197 +1,180 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_KEY!);
+const MANANA_URL = 'https://api.manana.kr/exchange/rate/KRW/USD.json';
+const BINANCE_URL = 'https://api.binance.com/api/v3/ticker/price';
 
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-const BINANCE_ENDPOINT = 'https://api.binance.com/api/v3/ticker/price';
-const NAVER_RATE_ENDPOINT = 'https://api.manana.kr/exchange/rate/KRW/USD.json';
-const NAVER_RATE_DATE_URL = (date: string) => `https://api.manana.kr/exchange/rate/KRW/USD/${date}.json`;
+function safeNum(n: any): number {
+  if (typeof n === 'number') return n;
+  if (typeof n === 'string') return Number(n) || 0;
+  return 0;
+}
 
 export async function GET(req: NextRequest) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
-
-  if (req.method === 'OPTIONS') {
-    return new NextResponse(null, { status: 204, headers });
+  
+  // 쿼리 파라미터 확인 - 상세 조회 모드
+  const { searchParams } = new URL(req.url);
+  const symbol = searchParams.get('symbol');
+  const startDate = searchParams.get('startDate');
+  const endDate = searchParams.get('endDate');
+  const tradeType = searchParams.get('tradeType');
+  const page = parseInt(searchParams.get('page') || '1');
+  const limit = parseInt(searchParams.get('limit') || '10');
+  
+  // 상세 조회 모드 (symbol이 있으면)
+  if (symbol && symbol !== 'ALL') {
+    let query = supabase.from('coin').select('*', { count: 'exact' }).eq('symbol', symbol);
+    if (startDate) query = query.gte('trade_date', startDate);
+    if (endDate) query = query.lte('trade_date', endDate);
+    if (tradeType && tradeType !== '전체') query = query.eq('trade_type', tradeType);
+    query = query.order('trade_date', { ascending: false });
+    const offset = (page - 1) * limit;
+    query = query.range(offset, offset + limit - 1);
+    const { data: rows, error, count } = await query;
+    if (error) return NextResponse.json({ error: error.message }, { status: 500, headers });
+    return NextResponse.json({ rows: rows || [], total: count || 0 }, { status: 200, headers });
   }
-
-  const { data: rows, error } = await supabase
-    .from('coin')
-    .select('symbol, kr_name, buy_date, quantity, invested_krw, invested_usd')
-    .order('symbol', { ascending: true });
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500, headers });
-  }
-
-  // 네이버 환율 fetch (최신 환율)
-  let usdKrw = 0;
+  
+  // 전체 조회 모드 (기존 로직)
+  const { data: rows, error } = await supabase.from('coin').select('*');
+  if (error) return NextResponse.json({ error: error.message }, { status: 500, headers });
+  // 환율 fetch
+  let usdKrw = 1450;
   try {
-    const res = await fetch(NAVER_RATE_ENDPOINT);
-    const data = await res.json();
-    usdKrw = Array.isArray(data) && typeof data[0]?.rate === 'number' ? data[0].rate : 0;
-  } catch (e) {
-    usdKrw = 0;
-  }
-  if (!usdKrw || isNaN(usdKrw) || usdKrw < 500) usdKrw = 1450;
-
-  // Binance 가격 fetch
-  let binanceData: { symbol: string; price: string }[] = [];
-  try {
-    const binanceRes = await fetch(BINANCE_ENDPOINT);
-    binanceData = await binanceRes.json();
-  } catch (e) {
-    binanceData = [];
-  }
-
-  type Grouped = {
-    symbol: string;
-    kr_name: string;
-    quantity: number;
-    invested_usd: number;
-    invested_krw: number;
-    latest_buy_date: string;
-    buy_date: string;
-    buy_rate?: number;
-    profit_krw?: number;
-    profit_rate_krw?: number;
-  };
-
-  // 1계좌만 있다고 가정, 데이터 하나의 buy_date로 환율 fetch
-  let buy_rate = 0;
-  let ref_buy_date = '';
-  if (rows && rows.length > 0 && rows[0].buy_date) {
-    ref_buy_date = rows[0].buy_date;
-    try {
-      const res = await fetch(NAVER_RATE_DATE_URL(ref_buy_date));
-      const data = await res.json();
-      buy_rate = Array.isArray(data) && typeof data[0]?.rate === 'number' ? data[0].rate : 0;
-    } catch (e) {
-      buy_rate = 0;
-    }
-  }
-  if (!buy_rate || isNaN(buy_rate) || buy_rate < 500) buy_rate = 1450;
-
-  const group: Record<string, Grouped> = {};
-  rows?.forEach((row) => {
-    if (!row.symbol) return;
-    if (!group[row.symbol]) {
-      group[row.symbol] = {
-        symbol: row.symbol,
-        kr_name: row.kr_name ?? '',
-        quantity: 0,
-        invested_usd: 0,
-        invested_krw: 0,
-        latest_buy_date: row.buy_date || '',
-        buy_date: row.buy_date || '',
-        buy_rate,
+    const manaRes = await fetch(MANANA_URL);
+    const manaArr = await manaRes.json();
+    if (manaArr && Array.isArray(manaArr) && typeof manaArr[0]?.rate === 'number' && manaArr[0].rate > 1000) usdKrw = manaArr[0].rate;
+  } catch (e) {}
+  // 바이낸스 fetch
+  let binance:any[] = [];
+  try { binance = await (await fetch(BINANCE_URL)).json(); } catch(e){}
+  // 코인별 집계
+  const group: Record<string, any> = {};
+  rows?.forEach((r:any) => {
+    if (!r.symbol) return;
+    if (!group[r.symbol]) {
+      group[r.symbol] = {
+        symbol: r.symbol,
+        kr_name: r.kr_name??'',
+        quantity: 0, invested_usd: 0, invested_krw: 0,
+        profit_usd: 0, profit_krw: 0,
+        trade_type: r.trade_type,
+        trade_rate: r.trade_rate,
       };
     }
-    group[row.symbol].quantity += Number(row.quantity ?? 0);
-    group[row.symbol].invested_usd += Number(row.invested_usd ?? 0);
-    // invested_krw는 null이면 자동 계산(usd*buy_rate)
-    if (row.invested_krw != null) {
-      group[row.symbol].invested_krw += Number(row.invested_krw);
-    } else {
-      group[row.symbol].invested_krw += Number(row.invested_usd ?? 0) * buy_rate;
-    }
-    if (!group[row.symbol].latest_buy_date || (row.buy_date && row.buy_date > group[row.symbol].latest_buy_date)) {
-      group[row.symbol].latest_buy_date = row.buy_date || '';
+    group[r.symbol].quantity += Number(r.quantity??0);
+    group[r.symbol].invested_usd += Number(r.invested_usd??0);
+    group[r.symbol].invested_krw += Number(r.invested_krw??0);
+    // 최신 거래일자 구분
+    if (!group[r.symbol].latest_date || r.trade_date > group[r.symbol].latest_date) {
+      group[r.symbol].latest_date = r.trade_date;
+      group[r.symbol].trade_rate = r.trade_rate;
     }
   });
-
-  let symbolGroups = Object.values(group).map((g) => {
-    const binanceSymbol = g.symbol.endsWith('USDT') ? g.symbol : `${g.symbol}USDT`;
-    const binance = binanceData.find((b) => b.symbol === binanceSymbol);
-    const currPriceUsdt = binance ? parseFloat(binance.price) : 0;
-    const valuation_usd = currPriceUsdt * g.quantity;
+  // 집계: 실시간 평가금액, 손익, 수익률 계산
+  let coins = Object.keys(group).map(sym => {
+    const g = group[sym];
+    // 스테이블코인 처리 (USDT, USDC, BUSD 등)
+    const stablecoins = ['USDT', 'USDC', 'BUSD', 'DAI', 'TUSD', 'USDP'];
+    let curr_usd = 0;
+    if (stablecoins.includes(sym.toUpperCase())) {
+      curr_usd = 1; // 스테이블코인은 1달러 고정
+    } else {
+      const binancePrice = binance.find(b => b.symbol === sym.toUpperCase()+'USDT');
+      curr_usd = binancePrice ? parseFloat(binancePrice.price) : 0;
+    }
+    const valuation_usd = curr_usd * g.quantity;
     const valuation_krw = valuation_usd * usdKrw;
     const profit_usd = valuation_usd - g.invested_usd;
     const profit_krw = valuation_krw - g.invested_krw;
-    const profit_rate = g.invested_usd ? (profit_usd / g.invested_usd) * 100 : 0;
-    const profit_rate_krw = g.invested_krw ? (profit_krw / g.invested_krw) * 100 : 0;
+    const profit_rate = g.invested_usd > 0 ? (profit_usd / g.invested_usd) * 100 : 0;
+    const profit_rate_krw = g.invested_krw > 0 ? (profit_krw / g.invested_krw) * 100 : 0;
     return {
-      symbol: g.symbol,
-      kr_name: g.kr_name,
-      quantity: g.quantity,
-      invested_usd: g.invested_usd,
-      invested_krw: g.invested_krw,
-      valuation_usd,
-      valuation_krw,
-      profit_usd,
-      profit_krw,
-      profit_rate,
-      profit_rate_krw,
-      latest_buy_date: g.latest_buy_date,
-      buy_rate: g.buy_rate,
+      ...g,
+      valuation_usd, valuation_krw,
+      profit_usd, profit_krw,
+      profit_rate, profit_rate_krw,
     };
   });
-
-  symbolGroups.sort((a, b) => b.invested_usd - a.invested_usd);
-  const total = symbolGroups.reduce(
-    (acc, c) => {
-      acc.quantity += c.quantity;
-      acc.invested_usd += c.invested_usd;
-      acc.valuation_usd += c.valuation_usd;
-      acc.invested_krw += c.invested_krw;
-      acc.valuation_krw += c.valuation_krw;
-      acc.profit_usd += c.profit_usd;
-      acc.profit_krw += c.profit_krw;
-      acc.profit_rate += c.profit_rate;
-      acc.profit_rate_krw += c.profit_rate_krw;
-      if (!acc.latest_buy_date || (c.latest_buy_date && c.latest_buy_date > acc.latest_buy_date)) {
-        acc.latest_buy_date = c.latest_buy_date;
-      }
-      return acc;
-    },
-    {
-      symbol: 'ALL',
-      kr_name: '전체',
-      quantity: 0,
-      invested_usd: 0,
-      valuation_usd: 0,
-      invested_krw: 0,
-      valuation_krw: 0,
-      profit_usd: 0,
-      profit_krw: 0,
-      profit_rate: 0,
-      profit_rate_krw: 0,
-      latest_buy_date: '',
-      buy_date: '',
-      buy_rate,
-    }
-  );
-  total.profit_rate = total.invested_usd ? (total.profit_usd / total.invested_usd) * 100 : 0;
-  total.profit_rate_krw = total.invested_krw ? (total.profit_krw / total.invested_krw) * 100 : 0;
-
-  const result = [total, ...symbolGroups];
-
-  return NextResponse.json({ coins: result, usdKrw, buy_rate }, { status: 200, headers });
+  // 투자금액KRW 내림차순 정렬
+  coins = coins.sort((a,b)=>b.invested_krw-a.invested_krw);
+  // 전체 합계
+  const all = coins.reduce((acc,c)=>{
+    acc.quantity += c.quantity; acc.invested_usd += c.invested_usd;
+    acc.invested_krw += c.invested_krw;
+    acc.valuation_usd += c.valuation_usd; acc.valuation_krw += c.valuation_krw;
+    acc.profit_usd += c.profit_usd; acc.profit_krw += c.profit_krw;
+    return acc;
+  },{symbol:'ALL',kr_name:'전체',quantity:0,invested_usd:0,invested_krw:0,valuation_usd:0,valuation_krw:0,profit_usd:0,profit_krw:0,profit_rate:0,profit_rate_krw:0});
+  all.profit_rate = all.invested_usd > 0 ? (all.profit_usd/all.invested_usd)*100 : 0;
+  all.profit_rate_krw = all.invested_krw > 0 ? (all.profit_krw/all.invested_krw)*100 : 0;
+  const result = [all,...coins];
+  return NextResponse.json({ coins: result, usdKrw }, { status:200, headers });
 }
 
 export async function POST(req: NextRequest) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
-
   try {
-    const { symbol, kr_name, buy_date, quantity, invested_krw, invested_usd, buy_rate } = await req.json();
-    const { error } = await supabase.from("coin").insert([
-      {
-        symbol, kr_name, buy_date, quantity,
-        invested_krw, invested_usd,
-        buy_rate_krw: buy_rate,
-      },
-    ]);
+    const { symbol, kr_name, trade_date, buy_date, quantity, invested_krw, invested_usd, trade_type, trade_rate, buy_rate } = await req.json();
+    // 컬럼명 호환: trade_date=buy_date, trade_rate=buy_rate
+    const insertObj = {
+      symbol,
+      kr_name,
+      trade_date: trade_date || buy_date,
+      quantity: safeNum(quantity),
+      invested_krw: safeNum(invested_krw),
+      invested_usd: safeNum(invested_usd),
+      trade_type: trade_type || '매수',
+      trade_rate: safeNum(trade_rate || buy_rate),
+      created_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from('coin').insert([insertObj]);
     if (error) return NextResponse.json({ error: error.message },{ status: 400, headers });
     return NextResponse.json({ ok: true }, { status: 200, headers });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "데이터 저장 실패" }, { status: 500, headers });
+    return NextResponse.json({ error: e?.message || "저장 실패" }, { status: 500, headers });
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, PATCH, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
+  try {
+    const { id, ...fields } = await req.json();
+    if (!id) throw new Error('ID가 필요합니다.');
+    const { error } = await supabase.from('coin').update({ ...fields, updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 400, headers });
+    return NextResponse.json({ ok: true }, { status: 200, headers });
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || "수정 실패" }, { status: 500, headers });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, PATCH, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
+  try {
+    const { id } = await req.json();
+    if (!id) throw new Error('ID가 필요합니다.');
+    const { error } = await supabase.from('coin').delete().eq('id', id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 400, headers });
+    return NextResponse.json({ ok: true }, { status: 200, headers });
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || "삭제 실패" }, { status: 500, headers });
   }
 }
