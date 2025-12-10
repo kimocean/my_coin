@@ -12,7 +12,10 @@ export default function EditModal({open, row, onClose, onSaved}:{open:boolean, r
   const handleChange = (e: React.ChangeEvent<HTMLInputElement|HTMLSelectElement>) => {
     setForm((f: any)=>({...f, [e.target.name]: e.target.value }));
   };
-  const handleDate = (d:Date)=> setForm((f: any)=>({...f, trade_date:dayjs(d).format('YYYY-MM-DD')}));
+  const handleDate = (d: Date | null) => {
+    if (!d) return; // 날짜가 선택 안 됐으면(null) 그냥 무시
+    setForm((f: any) => ({...f, trade_date: dayjs(d).format('YYYY-MM-DD')}));
+  };
   const handleSave = async(e:React.FormEvent)=>{
     e.preventDefault(); setError(""); setSaving(true);
     try{
