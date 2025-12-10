@@ -62,17 +62,27 @@ export async function GET(req: NextRequest) {
   // 바이낸스 fetch
   let binance:any[] = [];
   try { 
-    const binanceRes = await fetch(BINANCE_URL);
-    const binanceData = await binanceRes.json();
-    // 배열인지 확인
-    if (Array.isArray(binanceData)) {
-      binance = binanceData;
-    } else {
-      console.error('Binance API returned non-array:', typeof binanceData);
+    const binanceRes = await fetch(BINANCE_URL, {
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+    if (!binanceRes.ok) {
+      console.error(`Binance API error: ${binanceRes.status} ${binanceRes.statusText}`);
       binance = [];
+    } else {
+      const binanceData = await binanceRes.json();
+      // 배열인지 확인
+      if (Array.isArray(binanceData)) {
+        binance = binanceData;
+        console.log(`Binance API: Loaded ${binance.length} prices`);
+      } else {
+        console.error('Binance API returned non-array:', typeof binanceData, binanceData);
+        binance = [];
+      }
     }
-  } catch(e){
-    console.error('Binance fetch error:', e);
+  } catch(e: any){
+    console.error('Binance fetch error:', e?.message || e);
     binance = [];
   }
   // 코인별 집계
@@ -107,8 +117,15 @@ export async function GET(req: NextRequest) {
     if (stablecoins.includes(sym.toUpperCase())) {
       curr_usd = 1; // 스테이블코인은 1달러 고정
     } else {
-      const binancePrice = binance.find(b => b.symbol === sym.toUpperCase()+'USDT');
-      curr_usd = binancePrice ? parseFloat(binancePrice.price) : 0;
+      const searchSymbol = sym.toUpperCase() + 'USDT';
+      const binancePrice = binance.find(b => b && b.symbol === searchSymbol);
+      if (binancePrice && binancePrice.price) {
+        curr_usd = parseFloat(binancePrice.price);
+      } else {
+        // Binance에서 못 찾았을 때 로그 (디버깅용)
+        console.warn(`Price not found for ${searchSymbol}. Binance array length: ${binance.length}`);
+        curr_usd = 0;
+      }
     }
     const valuation_usd = curr_usd * g.quantity;
     const valuation_krw = valuation_usd * usdKrw;
