@@ -52,13 +52,20 @@ export default function CoinDetailPage() {
       if (tradeType !== '전체') params.append('tradeType', tradeType === '매수' ? 'B' : 'S');
       
       const res = await fetch(`/api/crypto?${params.toString()}`);
-      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(`API 오류: ${res.status}`);
+      }
+      const text = await res.text();
+      if (!text) {
+        throw new Error('서버에서 빈 응답을 반환했습니다.');
+      }
+      const data = JSON.parse(text);
       if (data.error) throw new Error(data.error);
       setTransactions(data.rows || []);
       setTotal(data.total || 0);
-    } catch (err) {
-      console.error(err);
-      alert('데이터 로딩 실패');
+    } catch (err: any) {
+      console.error('fetchData error:', err);
+      alert(`데이터 로딩 실패: ${err.message}`);
     } finally {
       setLoading(false);
     }

@@ -36,11 +36,19 @@ export default function Home() {
     setError(null);
     try {
       const res = await fetch("/api/crypto");
-      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(`API 오류: ${res.status} ${res.statusText}`);
+      }
+      const text = await res.text();
+      if (!text) {
+        throw new Error("서버에서 빈 응답을 반환했습니다. 환경변수를 확인해주세요.");
+      }
+      const data = JSON.parse(text);
       if (data.error) throw new Error(data.error);
       setCoins(data.coins as CoinGrouped[]);
       setUsdKrw(data.usdKrw);
     } catch (e: any) {
+      console.error('fetchData error:', e);
       setError(e.message || "에러가 발생했습니다");
     } finally {
       setLoading(false);

@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_KEY!);
+
+// 환경변수 체크
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
+  console.error('SUPABASE_URL or SUPABASE_KEY is missing!');
+}
+
+const supabase = createClient(
+  process.env.SUPABASE_URL || '', 
+  process.env.SUPABASE_KEY || ''
+);
 const MANANA_URL = 'https://api.manana.kr/exchange/rate/KRW/USD.json';
 const BINANCE_URL = 'https://api.binance.com/api/v3/ticker/price';
 
