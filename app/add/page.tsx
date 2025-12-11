@@ -175,10 +175,10 @@ export default function AddCoinPage({ isOpen = true, onClose }: { isOpen?: boole
       >
         {/* X 버튼 */}
         <button type="button" aria-label="닫기" className="absolute right-3 top-2 text-2xl text-slate-400 hover:text-white" onClick={closeModal}>×</button>
-        <h2 className="text-xl font-bold text-white mb-2 text-center">코인 거래 기록 추가</h2>
+        <h2 className="text-xl font-bold text-white mb-2 text-center">거래 내역 추가</h2>
         <label className="flex flex-col gap-1 text-slate-300">
           구분
-          <select name="trade_type" value={form.trade_type} onChange={handleChange} className={`rounded p-2 text-white border ${isInvalid('trade_type') ? 'border-red-500' : 'border-slate-500'} focus:outline-blue-500 bg-slate-700`}>
+          <select name="trade_type" value={form.trade_type} onChange={handleChange} className={`rounded p-3 text-white border ${isInvalid('trade_type') ? 'border-red-500' : 'border-slate-500'} focus:outline-blue-500 bg-slate-700`}>
             {tradeTypeOptions.map(o=>(<option value={o.value} key={o.value}>{o.label}</option>))}
           </select>
         </label>
@@ -224,10 +224,10 @@ export default function AddCoinPage({ isOpen = true, onClose }: { isOpen?: boole
         {error && <div className="text-red-400 rounded p-1 text-center text-sm">{error}</div>}
         <button
           type="submit"
-          className="mt-2 rounded bg-blue-600 hover:bg-blue-700 text-white py-2 font-bold text-2xl w-full"
+          className="mt-2 rounded bg-blue-600 hover:bg-blue-700 text-white py-2 font-bold w-full"
           disabled={saving || loadingRate}
           title={saving ? "저장중..." : "추가하기"}
-        >{saving ? "⏳" : "➕"}</button>
+        >{saving ? "⏳" : "등록"}</button>
       </form>
     </div>
   );

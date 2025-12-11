@@ -97,7 +97,7 @@ export default function CoinDetailPage() {
           >
             ◀️
           </button>
-          <h1 className="text-2xl font-bold text-center flex-1">{symbol} 거래 내역</h1>
+          <h1 className="text-lg font-bold text-center flex-1">{symbol} 거래 내역</h1>
           <button
             onClick={fetchData}
             disabled={loading}
@@ -109,7 +109,7 @@ export default function CoinDetailPage() {
         </div>
         
         {/* 검색 조건 */}
-        <div className="bg-slate-800 p-4 mb-4 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="bg-slate-800 p-4 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-3 flex-wrap">
             <span className="text-sm text-slate-300">일자</span>
             <DatePicker
@@ -129,9 +129,7 @@ export default function CoinDetailPage() {
               isClearable
               className="rounded p-2 text-white border border-slate-500 bg-slate-700 w-32"
             />
-          </div>
-          <div className="flex items-center gap-3 sm:ml-4">
-            <span className="text-sm text-slate-300">구분</span>
+            <span className="text-sm text-slate-300 sm:ml-4">구분</span>
             <select
               value={tradeType}
               onChange={e => setTradeType(e.target.value)}
@@ -141,14 +139,14 @@ export default function CoinDetailPage() {
               <option value="매수">매수</option>
               <option value="매도">매도</option>
             </select>
-            <button
-              onClick={() => { setPage(1); fetchData(); }}
-              disabled={loading}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed"
-            >
-              {loading ? '조회중...' : '조회'}
-            </button>
           </div>
+          <button
+            onClick={() => { setPage(1); fetchData(); }}
+            disabled={loading}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed sm:ml-auto"
+          >
+            {loading ? '조회중...' : '조회'}
+          </button>
         </div>
         
         {/* 테이블 */}
@@ -384,7 +382,7 @@ function EditModal({ transaction, onClose, onSave }: {
         
         <label className="flex flex-col gap-1 text-slate-300">
           구분
-          <select name="trade_type" value={form.trade_type} onChange={handleChange} className="rounded p-2 text-white border border-slate-500 bg-slate-700">
+          <select name="trade_type" value={form.trade_type} onChange={handleChange} className="rounded p-3 text-white border border-slate-500 bg-slate-700">
             <option value="B">매수</option>
             <option value="S">매도</option>
           </select>

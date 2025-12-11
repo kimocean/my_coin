@@ -164,6 +164,7 @@ export default function Home() {
                 const trade_rate = coin.trade_rate ?? coin.buy_rate ?? (usdKrw || 0);
                 const fontClass = coin.symbol === 'ALL' ? 'font-bold' : '';
                 const handleRowClick = () => {
+                  if (coin.symbol === 'ALL') return;
                   router.push(`/coins/${coin.symbol}`);
                 };
                 const isHovered = hoveredIndex === idx;
