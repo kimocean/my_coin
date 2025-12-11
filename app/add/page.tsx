@@ -109,8 +109,12 @@ export default function AddCoinPage({ isOpen = true, onClose }: { isOpen?: boole
     setTouched(t => ({...t, [name]: true}));
   };
   const closeModal = () => {
-    if(onClose) onClose();
-    else router.push("/");
+    if(onClose) {
+      onClose();
+    } else {
+      // router.back() 대신 replace를 사용하여 히스토리에 추가하지 않음
+      router.replace("/");
+    }
   };
   const isInvalid = (name: keyof typeof form) => touched[name] && !form[name];
   const allFilled = Object.entries(form).every(([k,v])=>!!v);
@@ -178,7 +182,7 @@ export default function AddCoinPage({ isOpen = true, onClose }: { isOpen?: boole
         <h2 className="text-xl font-bold text-white mb-2 text-center">거래 내역 추가</h2>
         <label className="flex flex-col gap-1 text-slate-300">
           구분
-          <select name="trade_type" value={form.trade_type} onChange={handleChange} className={`rounded p-3 text-white border ${isInvalid('trade_type') ? 'border-red-500' : 'border-slate-500'} focus:outline-blue-500 bg-slate-700`}>
+          <select name="trade_type" value={form.trade_type} onChange={handleChange} className={`rounded p-3 text-white border ${isInvalid('trade_type') ? 'border-red-500' : 'border-slate-500'} focus:outline-blue-500 bg-slate-700 appearance-none h-[48px]`}>
             {tradeTypeOptions.map(o=>(<option value={o.value} key={o.value}>{o.label}</option>))}
           </select>
         </label>

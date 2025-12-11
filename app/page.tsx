@@ -31,7 +31,23 @@ export default function Home() {
   const [refreshCount, setRefreshCount] = useState(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  const fetchData = async () => {
+  const fetchData = async (forceRefresh = false) => {
+    // sessionStorage에서 캐시 확인 (명시적 새로고침이 아닐 때)
+    if (!forceRefresh && refreshCount === 0) {
+      const cached = sessionStorage.getItem('crypto-dashboard-cache');
+      if (cached) {
+        try {
+          const data = JSON.parse(cached);
+          setCoins(data.coins || []);
+          setUsdKrw(data.usdKrw);
+          setLoading(false);
+          return;
+        } catch (e) {
+          // 캐시 파싱 실패 시 무시하고 새로 가져오기
+        }
+      }
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -47,6 +63,8 @@ export default function Home() {
       if (data.error) throw new Error(data.error);
       setCoins(data.coins as CoinGrouped[]);
       setUsdKrw(data.usdKrw);
+      // sessionStorage에 캐시 저장
+      sessionStorage.setItem('crypto-dashboard-cache', JSON.stringify(data));
     } catch (e: any) {
       console.error('fetchData error:', e);
       setError(e.message || "에러가 발생했습니다");
@@ -55,7 +73,9 @@ export default function Home() {
     }
   };
 
-  useEffect(() => { fetchData(); }, [refreshCount]);
+  useEffect(() => { 
+    fetchData(refreshCount > 0);
+  }, [refreshCount]);
 
   // ---행 색상/구분; 수익률 컬러---
   const posColor = "text-red-500", negColor = "text-blue-500", baseColor = "text-slate-50";

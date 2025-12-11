@@ -133,7 +133,7 @@ export default function CoinDetailPage() {
             <select
               value={tradeType}
               onChange={e => setTradeType(e.target.value)}
-              className="rounded p-2 text-white border border-slate-500 bg-slate-700"
+              className="rounded p-2 text-white border border-slate-500 bg-slate-700 appearance-none h-[36px]"
             >
               <option value="전체">전체</option>
               <option value="매수">매수</option>
@@ -382,7 +382,7 @@ function EditModal({ transaction, onClose, onSave }: {
         
         <label className="flex flex-col gap-1 text-slate-300">
           구분
-          <select name="trade_type" value={form.trade_type} onChange={handleChange} className="rounded p-3 text-white border border-slate-500 bg-slate-700">
+          <select name="trade_type" value={form.trade_type} onChange={handleChange} className="rounded p-3 text-white border border-slate-500 bg-slate-700 appearance-none h-[48px]">
             <option value="B">매수</option>
             <option value="S">매도</option>
           </select>
