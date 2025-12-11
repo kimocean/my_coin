@@ -90,73 +90,77 @@ export default function CoinDetailPage() {
     <div className="min-h-screen bg-slate-900 text-white p-4">
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold">{symbol} 거래 내역</h1>
-          <div className="flex gap-2">
+          <button
+            onClick={() => router.push('/')}
+            className="text-2xl hover:opacity-70 transition"
+            title="돌아가기"
+          >
+            ◀️
+          </button>
+          <h1 className="text-2xl font-bold text-center flex-1">{symbol} 거래 내역</h1>
+          <button
+            onClick={fetchData}
+            disabled={loading}
+            className="text-2xl hover:opacity-70 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            title={loading ? "로딩중..." : "새로고침"}
+          >
+            {loading ? '⏳' : '🔄'}
+          </button>
+        </div>
+        
+        {/* 검색 조건 */}
+        <div className="bg-slate-800 p-4 mb-4 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-sm text-slate-300">일자</span>
+            <DatePicker
+              selected={startDate}
+              onChange={date => setStartDate(date)}
+              dateFormat="yyyy-MM-dd"
+              placeholderText="시작일"
+              isClearable
+              className="rounded p-2 text-white border border-slate-500 bg-slate-700 w-32"
+            />
+            <span className="text-slate-400">~</span>
+            <DatePicker
+              selected={endDate}
+              onChange={date => setEndDate(date)}
+              dateFormat="yyyy-MM-dd"
+              placeholderText="종료일"
+              isClearable
+              className="rounded p-2 text-white border border-slate-500 bg-slate-700 w-32"
+            />
+          </div>
+          <div className="flex items-center gap-3 sm:ml-4">
+            <span className="text-sm text-slate-300">구분</span>
+            <select
+              value={tradeType}
+              onChange={e => setTradeType(e.target.value)}
+              className="rounded p-2 text-white border border-slate-500 bg-slate-700"
+            >
+              <option value="전체">전체</option>
+              <option value="매수">매수</option>
+              <option value="매도">매도</option>
+            </select>
             <button
-              onClick={fetchData}
+              onClick={() => { setPage(1); fetchData(); }}
               disabled={loading}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed"
             >
-              {loading ? '로딩중...' : '새로고침'}
-            </button>
-            <button
-              onClick={() => router.push('/')}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600"
-            >
-              돌아가기
+              {loading ? '조회중...' : '조회'}
             </button>
           </div>
         </div>
         
-        {/* 검색 조건 */}
-        <div className="bg-slate-800 p-4 mb-4 flex items-center gap-3">
-          <span className="text-sm text-slate-300">일자</span>
-          <DatePicker
-            selected={startDate}
-            onChange={date => setStartDate(date)}
-            dateFormat="yyyy-MM-dd"
-            placeholderText="시작일"
-            isClearable
-            className="rounded p-2 text-white border border-slate-500 bg-slate-700 w-32"
-          />
-          <span className="text-slate-400">~</span>
-          <DatePicker
-            selected={endDate}
-            onChange={date => setEndDate(date)}
-            dateFormat="yyyy-MM-dd"
-            placeholderText="종료일"
-            isClearable
-            className="rounded p-2 text-white border border-slate-500 bg-slate-700 w-32"
-          />
-          <span className="text-sm text-slate-300 ml-4">구분</span>
-          <select
-            value={tradeType}
-            onChange={e => setTradeType(e.target.value)}
-            className="rounded p-2 text-white border border-slate-500 bg-slate-700"
-          >
-            <option value="전체">전체</option>
-            <option value="매수">매수</option>
-            <option value="매도">매도</option>
-          </select>
-          <button
-            onClick={() => { setPage(1); fetchData(); }}
-            disabled={loading}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed ml-2"
-          >
-            {loading ? '조회중...' : '조회'}
-          </button>
-        </div>
-        
         {/* 테이블 */}
-        <div className="overflow-hidden">
-          <table className="w-full">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[600px]">
             <thead className="bg-slate-800">
               <tr>
-                <th className="px-4 py-3 text-center font-semibold">구분</th>
-                <th className="px-4 py-3 text-right font-semibold">수량</th>
-                <th className="px-4 py-3 text-right font-semibold">금액(KRW)</th>
-                <th className="px-4 py-3 text-right font-semibold">금액(USD)</th>
-                <th className="px-4 py-3 text-center font-semibold">일자</th>
+                <th className="px-4 py-3 text-center font-semibold whitespace-nowrap">구분</th>
+                <th className="px-4 py-3 text-right font-semibold whitespace-nowrap">수량</th>
+                <th className="px-4 py-3 text-right font-semibold whitespace-nowrap">금액(KRW)</th>
+                <th className="px-4 py-3 text-right font-semibold whitespace-nowrap">금액(USD)</th>
+                <th className="px-4 py-3 text-center font-semibold whitespace-nowrap">일자</th>
               </tr>
             </thead>
             <tbody>

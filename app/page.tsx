@@ -113,25 +113,26 @@ export default function Home() {
     <div className="min-h-screen bg-slate-900 px-1 py-4 text-white flex flex-col items-center">
       <main className="w-full max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-3">
-          <h1 className="text-lg font-bold text-center w-full">코인 수익률 대시보드 (2라인 표 실험)</h1>
+          <button
+            className="text-2xl hover:opacity-70 transition"
+            onClick={() => setRefreshCount((n) => n + 1)}
+            disabled={loading}
+            title="새로고침"
+          >
+            {loading ? "⏳" : "🔄"}
+          </button>
+          <h1 className="text-lg font-bold">koin</h1>
           <Link href="/add">
-            <button className="ml-2 rounded-full bg-blue-600 hover:bg-blue-800 text-white px-4 py-2 font-bold text-2xl">+</button>
+            <button className="text-2xl hover:opacity-70 transition" title="등록">➕</button>
           </Link>
         </div>
-        <button
-          className="mb-4 w-full rounded-md bg-slate-800 py-2 text-lg font-semibold transition hover:bg-slate-700"
-          onClick={() => setRefreshCount((n) => n + 1)}
-          disabled={loading}
-        >
-          {loading ? "시세 확인 중..." : "🔄 새로고침"}
-        </button>
         {error && <div className="text-red-400 text-center mb-4">{error}</div>}
         <div className="w-full max-w-6xl mx-auto overflow-x-auto">
           {/* 표 헤더 유지 */}
           <table className="min-w-full text-xs md:text-sm">
             <thead>
               {/* 기존 thead 유지 */}
-              <tr className="text-slate-400 border-b border-slate-700">
+              <tr className="text-slate-400">
                 <th className="px-2 py-3 font-semibold min-w-[60px]">코인</th>
                 <th className="px-2 py-3 font-semibold min-w-[80px]">손익USD</th>
                 <th className="px-2 py-3 font-semibold min-w-[80px]">손익KRW</th>
@@ -142,7 +143,7 @@ export default function Home() {
                 <th className="px-2 py-3 font-semibold min-w-[110px]">매입금액KRW</th>
                 <th className="px-2 py-3 font-semibold min-w-[70px]">매입환율</th>
               </tr>
-              <tr className="border-b border-slate-800 text-slate-400">
+              <tr className="text-slate-400 border-b border-slate-700">
                 <th className="px-2 py-1 font-semibold min-w-[60px]">한글명</th>
                 <th className="px-2 py-1 font-semibold min-w-[80px]">수익률USD</th>
                 <th className="px-2 py-1 font-semibold min-w-[80px]">수익률KRW</th>
@@ -161,7 +162,6 @@ export default function Home() {
                 const curr_price_usd = coin.quantity ? coin.valuation_usd / coin.quantity : undefined;
                 const curr_price_krw = coin.quantity ? coin.valuation_krw / coin.quantity : undefined;
                 const trade_rate = coin.trade_rate ?? coin.buy_rate ?? (usdKrw || 0);
-                const borderClass = 'border-b border-slate-600';
                 const fontClass = coin.symbol === 'ALL' ? 'font-bold' : '';
                 const handleRowClick = () => {
                   router.push(`/coins/${coin.symbol}`);
@@ -186,7 +186,7 @@ export default function Home() {
                       <td className="px-2 py-2 text-right">{trade_rate && isFinite(trade_rate)? trade_rate.toLocaleString(undefined, {maximumFractionDigits:2}): '-'}</td>
                     </tr>
                     <tr 
-                      className={`${borderClass} ${fontClass} ${isHovered ? 'bg-slate-800' : ''} cursor-pointer transition`} 
+                      className={`${idx < coins.length - 1 ? 'border-b border-slate-600' : ''} ${fontClass} ${isHovered ? 'bg-slate-800' : ''} cursor-pointer transition`} 
                       onClick={handleRowClick}
                       onMouseEnter={() => setHoveredIndex(idx)}
                       onMouseLeave={() => setHoveredIndex(null)}
@@ -213,7 +213,6 @@ export default function Home() {
       </main>
       <footer className="mt-8 text-slate-500 text-xs text-center w-full">
         <div>USD/KRW 환율: {usdKrw ? usdKrw.toLocaleString() : (loading ? <span className="animate-pulse">------</span> : "-")} </div>
-        <div>&copy; {new Date().getFullYear()} my-crypto-dashboard</div>
       </footer>
     </div>
   );

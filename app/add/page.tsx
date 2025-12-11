@@ -165,11 +165,11 @@ export default function AddCoinPage({ isOpen = true, onClose }: { isOpen?: boole
   // 모달 오버레이와 팝업
   if (!isOpen) return null;
   return (
-    <div className="fixed z-[1000] inset-0 flex items-center justify-center">
+    <div className="fixed z-[1000] inset-0 flex items-center justify-center overflow-y-auto py-4">
       <div className="absolute inset-0 bg-black bg-opacity-60 backdrop-blur-[2px] transition-all duration-200" onClick={closeModal}></div>
       {/* 팝업 본체 */}
       <form
-        className="relative z-10 bg-slate-800 rounded-lg shadow-xl px-5 py-7 w-full max-w-sm mx-auto flex flex-col gap-5 border border-slate-500"
+        className="relative z-10 bg-slate-800 rounded-lg shadow-xl px-5 py-7 w-full max-w-sm mx-auto my-auto flex flex-col gap-5 border border-slate-500"
         onSubmit={handleSubmit}
         onClick={e => e.stopPropagation()}
       >
@@ -216,7 +216,7 @@ export default function AddCoinPage({ isOpen = true, onClose }: { isOpen?: boole
         </label>
         <div className="flex flex-col gap-0.5 text-xs text-slate-400">
           <div>
-            매입환율: {loadingRate? <span className="animate-pulse">조회중...</span> : (buyRate ?? '-')}
+            매입환율: {loadingRate? <span className="animate-pulse">조회중...</span> : (buyRate !== undefined ? buyRate.toLocaleString(undefined, {maximumFractionDigits:2}) : '-')}
             {buyRateWarn && <span className="text-rose-400 ml-2">{buyRateWarn}</span>}
           </div>
           <div>매입금액(USD): {investedUsd !== undefined ? investedUsd.toLocaleString(undefined, {maximumFractionDigits:4}) : '-'}</div>
@@ -224,9 +224,10 @@ export default function AddCoinPage({ isOpen = true, onClose }: { isOpen?: boole
         {error && <div className="text-red-400 rounded p-1 text-center text-sm">{error}</div>}
         <button
           type="submit"
-          className="mt-2 rounded bg-blue-600 hover:bg-blue-700 text-white py-2 font-bold text-lg w-full"
+          className="mt-2 rounded bg-blue-600 hover:bg-blue-700 text-white py-2 font-bold text-2xl w-full"
           disabled={saving || loadingRate}
-        >{saving ? "저장중..." : "추가하기"}</button>
+          title={saving ? "저장중..." : "추가하기"}
+        >{saving ? "⏳" : "➕"}</button>
       </form>
     </div>
   );
