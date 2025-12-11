@@ -165,8 +165,8 @@ export default function AddCoinPage({ isOpen = true, onClose }: { isOpen?: boole
   // 모달 오버레이와 팝업
   if (!isOpen) return null;
   return (
-    <div className="fixed z-[1000] inset-0 flex items-center justify-center overflow-y-auto py-4">
-      <div className="absolute inset-0 bg-black bg-opacity-60 backdrop-blur-[2px] transition-all duration-200" onClick={closeModal}></div>
+    <div className="fixed z-[1000] inset-0 flex items-center justify-center overflow-y-auto py-4 bg-slate-900">
+      <div className="absolute inset-0 bg-slate-900 bg-opacity-80 backdrop-blur-[2px] transition-all duration-200 min-h-full" onClick={closeModal}></div>
       {/* 팝업 본체 */}
       <form
         className="relative z-10 bg-slate-800 rounded-lg shadow-xl px-5 py-7 w-full max-w-sm mx-auto my-auto flex flex-col gap-5 border border-slate-500"

@@ -372,10 +372,10 @@ function EditModal({ transaction, onClose, onSave }: {
   };
   
   return (
-    <div className="fixed z-[1000] inset-0 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black bg-opacity-60 backdrop-blur-[2px]" onClick={onClose}></div>
+    <div className="fixed z-[1000] inset-0 flex items-center justify-center overflow-y-auto py-4 bg-slate-900">
+      <div className="absolute inset-0 bg-black bg-opacity-60 backdrop-blur-[2px] min-h-full" onClick={onClose}></div>
       <form
-        className="relative z-10 bg-slate-800 rounded-lg shadow-xl px-5 py-7 w-full max-w-sm mx-auto flex flex-col gap-5 border border-slate-500"
+        className="relative z-10 bg-slate-800 rounded-lg shadow-xl px-5 py-7 w-full max-w-sm mx-auto my-auto flex flex-col gap-5 border border-slate-500"
         onSubmit={handleSubmit}
         onClick={e => e.stopPropagation()}
       >
