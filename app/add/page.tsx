@@ -23,17 +23,39 @@ const tradeTypeOptions = [
   { label: "매도", value: "S" }
 ];
 
-export default function AddCoinPage({ isOpen = true, onClose }: { isOpen?: boolean, onClose?: () => void }) {
+export default function AddCoinPage({ 
+  isOpen = true, 
+  onClose,
+  onSave,
+  initialSymbol = "",
+  initialKrName = ""
+}: { 
+  isOpen?: boolean; 
+  onClose?: () => void;
+  onSave?: () => void;
+  initialSymbol?: string;
+  initialKrName?: string;
+}) {
   const router = useRouter();
   // 진짜 등록용 form state
   const [form, setForm] = useState({
     trade_type: "B",
-    symbol: "",
-    kr_name: "",
+    symbol: initialSymbol,
+    kr_name: initialKrName,
     buy_date: dayjs().format("YYYY-MM-DD"),
     quantity: "",
     invested_krw: "",
   });
+  
+  // initialSymbol이나 initialKrName이 변경되면 form 업데이트
+  useEffect(() => {
+    if (initialSymbol) {
+      setForm(f => ({ ...f, symbol: initialSymbol }));
+    }
+    if (initialKrName) {
+      setForm(f => ({ ...f, kr_name: initialKrName }));
+    }
+  }, [initialSymbol, initialKrName]);
   const [pickedDate, setPickedDate] = useState<Date>(new Date());
   const [buyRate, setBuyRate] = useState<number|undefined>();
   const [investedUsd, setInvestedUsd] = useState<number|undefined>();
@@ -153,10 +175,14 @@ export default function AddCoinPage({ isOpen = true, onClose }: { isOpen?: boole
       // sessionStorage 캐시 무효화 플래그 설정 (새 데이터 반영을 위해)
       sessionStorage.setItem('crypto-dashboard-cache-invalidated', 'true');
       // 대시보드 새로고침
+      if (onSave) {
+        // 등록 성공 시 onSave 콜백 호출 (상세조회 화면 등)
+        onSave();
+      }
       if (onClose) {
         onClose();
-        window.location.reload();
       } else {
+        // 직접 라우트로 접근한 경우
         router.push('/');
         router.refresh();
       }

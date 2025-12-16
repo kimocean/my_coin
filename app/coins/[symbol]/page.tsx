@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import DatePicker from "react-datepicker";
 import dayjs from "dayjs";
 import "react-datepicker/dist/react-datepicker.css";
+import AddCoinPage from "@/app/add/page";
 
 interface Transaction {
   id: number;
@@ -35,6 +36,8 @@ export default function CoinDetailPage() {
   
   // 수정 모달
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  // 등록 모달
+  const [showAddModal, setShowAddModal] = useState(false);
   
   const limit = 10;
   const totalPages = Math.ceil(total / limit);
@@ -98,14 +101,23 @@ export default function CoinDetailPage() {
             ◀️
           </button>
           <h1 className="text-lg font-bold text-center flex-1">{symbol} 거래 내역</h1>
-          <button
-            onClick={fetchData}
-            disabled={loading}
-            className="text-2xl hover:opacity-70 transition disabled:opacity-50 disabled:cursor-not-allowed"
-            title={loading ? "로딩중..." : "새로고침"}
-          >
-            {loading ? '⏳' : '🔄'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="text-2xl hover:opacity-70 transition"
+              title="등록"
+            >
+              ➕
+            </button>
+            <button
+              onClick={fetchData}
+              disabled={loading}
+              className="text-2xl hover:opacity-70 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              title={loading ? "로딩중..." : "새로고침"}
+            >
+              {loading ? '⏳' : '🔄'}
+            </button>
+          </div>
         </div>
         
         {/* 검색 조건 */}
@@ -265,6 +277,23 @@ export default function CoinDetailPage() {
           }}
         />
       )}
+      
+      {/* 등록 모달 */}
+      {showAddModal && (
+        <AddCoinPage
+          isOpen={showAddModal}
+          onClose={() => {
+            setShowAddModal(false);
+          }}
+          onSave={() => {
+            // 등록 성공 시에만 재조회
+            sessionStorage.setItem('crypto-dashboard-cache-invalidated', 'true');
+            fetchData();
+          }}
+          initialSymbol={symbol}
+          initialKrName={transactions.length > 0 ? transactions[0].kr_name : ""}
+        />
+      )}
     </div>
   );
 }
@@ -373,7 +402,7 @@ function EditModal({ transaction, onClose, onSave }: {
   
   return (
     <div className="fixed z-[1000] inset-0 flex items-center justify-center overflow-y-auto py-4 bg-slate-900">
-      <div className="absolute inset-0 bg-black bg-opacity-60 backdrop-blur-[2px] min-h-full" onClick={onClose}></div>
+      <div className="absolute inset-0 bg-slate-900 bg-opacity-80 backdrop-blur-[2px] min-h-full" onClick={onClose}></div>
       <form
         className="relative z-10 bg-slate-800 rounded-lg shadow-xl px-5 py-7 w-full max-w-sm mx-auto my-auto flex flex-col gap-5 border border-slate-500"
         onSubmit={handleSubmit}
