@@ -74,9 +74,10 @@ export default function CoinDetailPage() {
     }
   };
   
+  // 초기 로드 및 페이지 변경 시에만 자동 검색
   useEffect(() => {
     fetchData();
-  }, [page, startDate, endDate, tradeType]);
+  }, [page]);
   
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages) {
@@ -145,7 +146,7 @@ export default function CoinDetailPage() {
             <select
               value={tradeType}
               onChange={e => setTradeType(e.target.value)}
-              className="rounded p-2 text-white border border-slate-500 bg-slate-700 appearance-none h-[36px]"
+              className="rounded p-2 text-white border border-slate-500 bg-slate-700 appearance-none w-32"
             >
               <option value="전체">전체</option>
               <option value="매수">매수</option>
