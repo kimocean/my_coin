@@ -259,6 +259,8 @@ export default function CoinDetailPage() {
           onClose={() => setEditingTx(null)}
           onSave={() => {
             setEditingTx(null);
+            // sessionStorage 캐시 무효화 플래그 설정 (새 데이터 반영을 위해)
+            sessionStorage.setItem('crypto-dashboard-cache-invalidated', 'true');
             fetchData();
           }}
         />

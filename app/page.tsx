@@ -33,9 +33,12 @@ export default function Home() {
 
   const fetchData = async (forceRefresh = false) => {
     // sessionStorage에서 캐시 확인 (명시적 새로고침이 아닐 때)
+    // 단, 캐시가 무효화되었는지 확인 (데이터 변경 후에는 캐시 무시)
     if (!forceRefresh && refreshCount === 0) {
       const cached = sessionStorage.getItem('crypto-dashboard-cache');
-      if (cached) {
+      const cacheInvalidated = sessionStorage.getItem('crypto-dashboard-cache-invalidated');
+      
+      if (cached && !cacheInvalidated) {
         try {
           const data = JSON.parse(cached);
           setCoins(data.coins || []);
@@ -45,6 +48,11 @@ export default function Home() {
         } catch (e) {
           // 캐시 파싱 실패 시 무시하고 새로 가져오기
         }
+      }
+      
+      // 캐시 무효화 플래그 제거
+      if (cacheInvalidated) {
+        sessionStorage.removeItem('crypto-dashboard-cache-invalidated');
       }
     }
 

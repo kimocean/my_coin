@@ -150,6 +150,8 @@ export default function AddCoinPage({ isOpen = true, onClose }: { isOpen?: boole
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error(await res.text());
+      // sessionStorage 캐시 무효화 플래그 설정 (새 데이터 반영을 위해)
+      sessionStorage.setItem('crypto-dashboard-cache-invalidated', 'true');
       // 대시보드 새로고침
       if (onClose) {
         onClose();

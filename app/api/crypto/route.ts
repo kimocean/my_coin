@@ -111,16 +111,61 @@ export async function GET(req: NextRequest) {
         quantity: 0, invested_usd: 0, invested_krw: 0,
         profit_usd: 0, profit_krw: 0,
         trade_type: r.trade_type,
-        trade_rate: r.trade_rate,
+        trade_rate: 0,
+        // 환율 가중 평균 계산을 위한 변수
+        total_krw_for_rate: 0, // 환율 계산용 총 KRW (매수만)
+        total_weighted_krw: 0, // 가중 평균 계산용 (KRW * 환율)
+        latest_date: '',
       };
     }
-    group[r.symbol].quantity += Number(r.quantity??0);
-    group[r.symbol].invested_usd += Number(r.invested_usd??0);
-    group[r.symbol].invested_krw += Number(r.invested_krw??0);
-    // 최신 거래일자 구분
+    const isBuy = r.trade_type === 'B';
+    const quantity = Number(r.quantity??0);
+    const invested_krw = Number(r.invested_krw??0);
+    const trade_rate = Number(r.trade_rate??0);
+    
+    // 매수는 +, 매도는 -
+    if (isBuy) {
+      group[r.symbol].quantity += quantity;
+      group[r.symbol].invested_krw += invested_krw;
+      
+      // USD는 실제 환율로 재계산 (DB의 invested_usd가 부정확할 수 있음)
+      const calculated_usd = trade_rate > 0 ? invested_krw / trade_rate : 0;
+      group[r.symbol].invested_usd += calculated_usd;
+      
+      // 환율 가중 평균 계산용 (매수만 포함)
+      // 가중 평균 = Σ(KRW) / Σ(KRW / 환율)
+      if (trade_rate > 0) {
+        group[r.symbol].total_krw_for_rate += invested_krw;
+        group[r.symbol].total_weighted_krw += invested_krw / trade_rate;
+      }
+    } else {
+      // 매도: 수량과 금액 빼기
+      group[r.symbol].quantity -= quantity;
+      group[r.symbol].invested_krw -= invested_krw;
+      
+      // USD도 재계산하여 빼기
+      const calculated_usd = trade_rate > 0 ? invested_krw / trade_rate : 0;
+      group[r.symbol].invested_usd -= calculated_usd;
+    }
+    
+    // 최신 거래일자 업데이트
     if (!group[r.symbol].latest_date || r.trade_date > group[r.symbol].latest_date) {
       group[r.symbol].latest_date = r.trade_date;
-      group[r.symbol].trade_rate = r.trade_rate;
+    }
+  });
+  
+  // 환율 가중 평균 계산 (매수 금액 기준)
+  Object.keys(group).forEach(sym => {
+    const g = group[sym];
+    if (g.total_krw_for_rate > 0 && g.total_weighted_krw > 0) {
+      // 가중 평균 환율 = 총 매수 KRW / 총 매수 USD
+      // 총 매수 USD = Σ(KRW / 각 거래의 환율)
+      g.trade_rate = g.total_krw_for_rate / g.total_weighted_krw;
+    } else if (g.invested_krw > 0 && g.invested_usd > 0) {
+      // 매도만 있거나 음수인 경우 현재 잔액 기준
+      g.trade_rate = g.invested_krw / g.invested_usd;
+    } else {
+      g.trade_rate = 0;
     }
   });
   // 집계: 실시간 평가금액, 손익, 수익률 계산
