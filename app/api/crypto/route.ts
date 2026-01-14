@@ -59,11 +59,38 @@ export async function GET(req: NextRequest) {
     const manaArr = await manaRes.json();
     if (manaArr && Array.isArray(manaArr) && typeof manaArr[0]?.rate === 'number' && manaArr[0].rate > 1000) usdKrw = manaArr[0].rate;
   } catch (e) {}
-  // CoinPaprika API로 가격 가져오기
+  // 코인 가격 가져오기: CoinGecko를 먼저 사용 (BTC/ETH 확실히 가져오기 위해)
   let coinPrices: Record<string, number> = {};
+  
+  // 1. CoinGecko로 BTC, ETH 가격 먼저 가져오기 (가장 안정적)
+  try {
+    const geckoController = new AbortController();
+    const geckoTimeout = setTimeout(() => geckoController.abort(), 5000);
+    const geckoRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd', {
+      headers: { 'Accept': 'application/json' },
+      signal: geckoController.signal,
+    });
+    clearTimeout(geckoTimeout);
+    if (geckoRes.ok) {
+      const geckoData = await geckoRes.json();
+      if (geckoData.bitcoin?.usd) coinPrices['BTC'] = geckoData.bitcoin.usd;
+      if (geckoData.ethereum?.usd) coinPrices['ETH'] = geckoData.ethereum.usd;
+      console.log(`CoinGecko: BTC=${coinPrices['BTC']}, ETH=${coinPrices['ETH']}`);
+    } else {
+      console.error(`CoinGecko API error: ${geckoRes.status} ${geckoRes.statusText}`);
+    }
+  } catch(e: any){
+    if (e.name === 'AbortError') {
+      console.error('CoinGecko API timeout');
+    } else {
+      console.error('CoinGecko fetch error:', e?.message || e);
+    }
+  }
+  
+  // 2. CoinPaprika로 나머지 알트코인 가격 가져오기
   try { 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5초 타임아웃
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
     
     const paprikaRes = await fetch(COINPAPRIKA_URL, {
       headers: {
@@ -77,18 +104,17 @@ export async function GET(req: NextRequest) {
       console.error(`CoinPaprika API error: ${paprikaRes.status} ${paprikaRes.statusText}`);
     } else {
       const paprikaData = await paprikaRes.json();
-      // 배열인지 확인
       if (Array.isArray(paprikaData)) {
-        // CoinPaprika는 symbol 필드로 매칭 (예: BTC-USD, ETH-USD)
         paprikaData.forEach((coin: any) => {
           if (coin.symbol && coin.quotes?.USD?.price) {
             const symbol = coin.symbol.toUpperCase();
-            coinPrices[symbol] = coin.quotes.USD.price;
+            // BTC, ETH는 CoinGecko에서 이미 가져왔으므로 덮어쓰지 않음
+            if (!coinPrices[symbol]) {
+              coinPrices[symbol] = coin.quotes.USD.price;
+            }
           }
         });
-        console.log(`CoinPaprika API: Loaded ${Object.keys(coinPrices).length} prices`);
-        // BTC, ETH가 있는지 확인
-        console.log(`BTC found: ${!!coinPrices['BTC']}, ETH found: ${!!coinPrices['ETH']}`);
+        console.log(`CoinPaprika API: Loaded ${Object.keys(coinPrices).length} total prices`);
       } else {
         console.error('CoinPaprika API returned non-array:', typeof paprikaData);
       }
