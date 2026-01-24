@@ -1,22 +1,37 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_KEY || '';
 
 export async function GET(req: Request) {
   try {
-    // 요청 헤더 확인 (Vercel Cron에서만 실행되도록)
-    const authHeader = req.headers.get('authorization');
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    // Vercel Cron 인증 확인 (x-vercel-cron 헤더 확인)
+    const cronHeader = req.headers.get('x-vercel-cron');
+    // CRON_SECRET이 설정되어 있으면 추가 인증 확인
+    if (process.env.CRON_SECRET) {
+      const authHeader = req.headers.get('authorization');
+      if (authHeader !== `Bearer ${process.env.CRON_SECRET}` && !cronHeader) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+    } else if (!cronHeader) {
+      // CRON_SECRET이 없으면 Vercel Cron 헤더만 확인
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Supabase credentials not configured',
+        timestamp: new Date().toISOString()
+      }, { status: 500 });
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
     
-    // 간단한 쿼리로 Supabase 연결 유지
+    // 실제 사용하는 테이블(coin)에 쿼리하여 Supabase 연결 유지
     const { data, error } = await supabase
-      .from('crypto_investments')
+      .from('coin')
       .select('id')
       .limit(1);
 
@@ -32,7 +47,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ 
       success: true, 
       message: 'Supabase keepalive successful',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      dataCount: data?.length || 0
     });
   } catch (err) {
     console.error('Keepalive exception:', err);
