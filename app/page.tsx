@@ -2,7 +2,6 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
 
 type CoinGrouped = {
   symbol: string;
@@ -32,28 +31,17 @@ export default function Home() {
   const [refreshCount, setRefreshCount] = useState(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  // 대시보드 새로고침 시 Supabase keepalive 쿼리 직접 실행 (크론과 동일한 쿼리)
+  // 대시보드 새로고침 시 Supabase keepalive 쿼리 실행 (크론과 동일한 API 엔드포인트 호출)
+  // 서버 사이드에서 기존 SUPABASE_URL, SUPABASE_KEY 환경변수 사용
   const pingKeepalive = async () => {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    
-    if (!supabaseUrl || !supabaseAnonKey) {
-      console.warn("Supabase 환경변수가 설정되지 않아 keepalive를 건너뜁니다.");
-      return;
-    }
-
     try {
-      const supabase = createClient(supabaseUrl, supabaseAnonKey);
-      // 크론과 동일한 쿼리: coin 테이블에서 id만 1개 조회 (데이터 변경 없음)
-      const { data, error } = await supabase
-        .from('coin')
-        .select('id')
-        .limit(1);
-
-      if (error) {
-        console.warn("keepalive 쿼리 실패:", error.message);
+      const res = await fetch("/api/cron/keepalive");
+      const data = await res.json();
+      
+      if (res.ok && data.success) {
+        console.log("keepalive 쿼리 성공:", data.message, "-", data.dataCount || 0, "개 레코드 확인됨");
       } else {
-        console.log("keepalive 쿼리 성공:", data?.length || 0, "개 레코드 확인됨");
+        console.warn("keepalive 쿼리 실패:", data.error || res.statusText);
       }
     } catch (err: any) {
       console.warn("keepalive 쿼리 에러:", err?.message || err);
