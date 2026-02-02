@@ -4,21 +4,10 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_KEY || '';
 
-export async function GET(req: Request) {
+// Supabase를 깨우기 위한 단순 keepalive 엔드포인트
+// - 인증 없이 누구나 호출 가능하게 두어, Vercel Cron / 수동 호출 모두 성공하게 함
+export async function GET() {
   try {
-    // Vercel Cron 인증 확인 (x-vercel-cron 헤더 확인)
-    const cronHeader = req.headers.get('x-vercel-cron');
-    // CRON_SECRET이 설정되어 있으면 추가 인증 확인
-    if (process.env.CRON_SECRET) {
-      const authHeader = req.headers.get('authorization');
-      if (authHeader !== `Bearer ${process.env.CRON_SECRET}` && !cronHeader) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
-    } else if (!cronHeader) {
-      // CRON_SECRET이 없으면 Vercel Cron 헤더만 확인
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     if (!supabaseUrl || !supabaseKey) {
       return NextResponse.json({ 
         success: false, 
