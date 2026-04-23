@@ -8,6 +8,11 @@ const supabaseKey =
   '';
 const cronSecret = process.env.CRON_SECRET || '';
 
+type HeartbeatRow = {
+  seq: number;
+  last_time: string; // timestamptz
+};
+
 function formatKst(date: Date) {
   // ISO 형태가 필요하면 서버/클라에서 timeZone 변환을 해도 되지만,
   // 여기서는 사람이 보기 좋은 KST 문자열을 함께 내려준다.
@@ -65,6 +70,7 @@ export async function GET(request: Request) {
     // - Supabase SQL Editor에서 public.bump_heartbeat() 함수를 생성해둬야 함
     const { data, error } = await supabase
       .rpc('bump_heartbeat', { p_source: source })
+      .returns<HeartbeatRow>()
       .single();
 
     if (error) {
@@ -79,14 +85,18 @@ export async function GET(request: Request) {
 
     console.log(`[${timestamp}] Keepalive successful from ${source}`);
     
+    const heartbeat = (data as unknown as HeartbeatRow | null) ?? null;
+
     const res = NextResponse.json({ 
       success: true, 
       message: 'Supabase keepalive successful',
       timestamp,
       timestampKst,
       source,
-      heartbeat: data,
-      heartbeatLastTimeKst: data?.last_time ? formatKst(new Date(data.last_time)) : null,
+      heartbeat,
+      heartbeatLastTimeKst: heartbeat?.last_time
+        ? formatKst(new Date(heartbeat.last_time))
+        : null,
     });
     // 캐시로 인해 Supabase 호출이 생략되는 것을 방지
     res.headers.set('Cache-Control', 'no-store');
